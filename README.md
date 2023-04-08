@@ -1,3 +1,7 @@
+# Forked
+
+Have customised the plugin.py file to allow for multiple snapshots in the same test to help improve efficiency of test runs (not needing to keep redoing database as often).
+
 # Pytest Plugin for Visual Testing with Playwright
 
 Based on [pixelmatch-py](https://github.com/whtsky/pixelmatch-py) image comparison library.
