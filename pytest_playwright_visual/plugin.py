@@ -16,34 +16,67 @@ def assert_snapshot(pytestconfig: Any, request: Any, browser_name: str) -> Calla
 
     def compare(img: bytes, *, threshold: float = 0.1, name=f'{test_name}.png', fail_fast=False) -> None:
         update_snapshot = pytestconfig.getoption("--update-snapshots")
-        test_file_name = str(os.path.basename(Path(request.node.fspath))).strip('.py')
+        force_update_snapshot = pytestconfig.getoption(
+            "--update-snapshots-forceall")
+        test_file_name = str(os.path.basename(
+            Path(request.node.fspath))).strip('.py')
         filepath = (
-                Path(request.node.fspath).parent.resolve()
-                / 'snapshots'
-                / test_file_name
-                / test_dir
+            Path(request.node.fspath).parent.resolve()
+            / 'snapshots'
+            / test_file_name
+            / test_dir
         )
         filepath.mkdir(parents=True, exist_ok=True)
         file = filepath / name
         # Create a dir where all snapshot test failures will go
         results_dir_name = (Path(request.node.fspath).parent.resolve()
                             / "snapshot_tests_failures")
+        snapshot_name = name.split('.')[0]
         test_results_dir = (results_dir_name
-                            / test_file_name / test_name)
-        # Remove a single test's past run dir with actual, diff and expected images
-        if test_results_dir.exists():
+                            / test_file_name / test_name / snapshot_name)
+
+        # Remove a snapshots past run dir with actual, diff and expected images
+        previous_failure = test_results_dir.exists()
+        if previous_failure:
             shutil.rmtree(test_results_dir)
-        if update_snapshot:
+
+        # If force updating them can do straight away
+        if force_update_snapshot:
             file.write_bytes(img)
-            pytest.fail("--> Snapshots updated. Please review images")
+            print(f'Force updated: {name}')
+            return
+
+        # Only update in case a previous failure was registered
+        # This guards against the case where a test finishes early and
+        # we dont get a chance to see a snapshot which was due to fail
+        # If no previous failure was registered then it will attempt to diff
+        # the image and sucessfully raise an error for us to review
+        if update_snapshot and previous_failure:
+            file.write_bytes(img)
+            print(f'Updated: {name}')
+            return
+            # pytest.fail(f'Updated: {name}', pytrace=False)
+
         if not file.exists():
             file.write_bytes(img)
-            # pytest.fail(
-            pytest.fail("--> New snapshot(s) created. Please review images")
+            print(f'Created: {name}')
+            return
+            # pytest.fail(f'Created: {name}', pytrace=False)
+
+        # This will happen in case in all other cases
         img_a = Image.open(BytesIO(img))
         img_b = Image.open(file)
         img_diff = Image.new("RGBA", img_a.size)
-        mismatch = pixelmatch(img_a, img_b, img_diff, threshold=threshold, fail_fast=fail_fast)
+        try:
+            mismatch = pixelmatch(img_a, img_b, img_diff,
+                                  threshold=threshold, fail_fast=fail_fast)
+        except ValueError as e:
+            # Save failed image
+            test_results_dir.mkdir(parents=True, exist_ok=True)
+            img_a.save(f'{test_results_dir}/Failed_{name}')
+            # Raise original error
+            raise e
+
         if mismatch == 0:
             return
         else:
@@ -52,7 +85,7 @@ def assert_snapshot(pytestconfig: Any, request: Any, browser_name: str) -> Calla
             img_diff.save(f'{test_results_dir}/Diff_{name}')
             img_a.save(f'{test_results_dir}/Actual_{name}')
             img_b.save(f'{test_results_dir}/Expected_{name}')
-            pytest.fail("--> Snapshots DO NOT match!")
+            pytest.fail(f'DOES NOT MATCH: {name}', pytrace=False)
 
     return compare
 
@@ -61,6 +94,12 @@ def pytest_addoption(parser: Any) -> None:
     group = parser.getgroup("playwright-snapshot", "Playwright Snapshot")
     group.addoption(
         "--update-snapshots",
+        action="store_true",
+        default=False,
+        help="Update snapshots.",
+    )
+    group.addoption(
+        "--update-snapshots-forceall",
         action="store_true",
         default=False,
         help="Update snapshots.",
