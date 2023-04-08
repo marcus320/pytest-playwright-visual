@@ -1,6 +1,6 @@
 # Forked
 
-Have customised the plugin.py file to allow for multiple snapshots in the same test to help improve efficiency of test runs (not needing to keep redoing database as often).
+Have customised the plugin.py file to allow for multiple snapshots in the same test to help improve efficiency of test runs (not needing to keep redoing database as often). Installed with `pip install -e git+https://github.com/marcus320/pytest-playwright-visual.git#egg=pytest-playwright-visual`
 
 # Pytest Plugin for Visual Testing with Playwright
 
